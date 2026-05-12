@@ -1,0 +1,23 @@
+# Vocal Humanizer AI — Python backend dependencies
+# Install with: pip install -r requirements.txt
+
+# Web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+
+# Audio I/O and analysis
+librosa>=0.10.2
+soundfile>=0.12.1
+numpy>=1.26.0
+scipy>=1.13.0
+
+# Audio effects (optional but recommended — enables high-quality reverb)
+pedalboard>=0.9.16
+
+# Optional: full-song stem separation (large download ~300 MB)
+# Uncomment to enable "Full Song" input mode:
+# demucs>=4.0.1
+
+# Utilities
+python-dotenv>=1.0.0

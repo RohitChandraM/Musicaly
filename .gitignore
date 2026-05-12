@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# Temp audio files
+temp_files/
+*.wav
+*.mp3
+*.flac
+*.m4a
+
+# Frontend build
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Env
+.env
+.env.local
