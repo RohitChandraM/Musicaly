@@ -20,67 +20,45 @@ export default function App() {
   const [fileId, setFileId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-
   const [inputType, setInputType] = useState("auto");
   const [preset, setPreset] = useState("natural");
   const [strength, setStrength] = useState(0.75);
-
   const [jobId, setJobId] = useState(null);
   const [jobStatus, setJobStatus] = useState(null);
   const [processing, setProcessing] = useState(false);
-
   const [processedFileId, setProcessedFileId] = useState(null);
   const [processedUrl, setProcessedUrl] = useState(null);
-
   const pollRef = useRef(null);
 
-  useEffect(() => {
-    return () => {
-      if (processedUrl) URL.revokeObjectURL(processedUrl);
-    };
-  }, [processedUrl]);
+  useEffect(() => () => { if (processedUrl) URL.revokeObjectURL(processedUrl); }, [processedUrl]);
 
   useEffect(() => {
     if (!jobId) return;
-
     pollRef.current = setInterval(async () => {
       try {
         const res = await fetch(`${API}/status/${jobId}`);
         if (!res.ok) return;
         const data = await res.json();
         setJobStatus(data);
-
         if (data.status === "done") {
           clearInterval(pollRef.current);
           setProcessing(false);
           setProcessedFileId(fileId);
           const audioRes = await fetch(`${API}/download/${fileId}?fmt=wav`);
-          if (audioRes.ok) {
-            const blob = await audioRes.blob();
-            setProcessedUrl(URL.createObjectURL(blob));
-          }
+          if (audioRes.ok) setProcessedUrl(URL.createObjectURL(await audioRes.blob()));
         } else if (data.status === "error") {
           clearInterval(pollRef.current);
           setProcessing(false);
         }
-      } catch {
-        // ignore poll errors
-      }
+      } catch {}
     }, 1500);
-
     return () => clearInterval(pollRef.current);
   }, [jobId, fileId]);
 
   const handleFileSelected = async (selectedFile) => {
-    setFile(selectedFile);
-    setFileId(null);
-    setUploadError(null);
-    setJobStatus(null);
-    setJobId(null);
-    setProcessedFileId(null);
-    setProcessedUrl(null);
+    setFile(selectedFile); setFileId(null); setUploadError(null);
+    setJobStatus(null); setJobId(null); setProcessedFileId(null); setProcessedUrl(null);
     setUploading(true);
-
     try {
       const form = new FormData();
       form.append("file", selectedFile);
@@ -100,9 +78,7 @@ export default function App() {
     if (!fileId) return;
     setProcessing(true);
     setJobStatus({ status: "queued", progress: 0 });
-    setProcessedFileId(null);
-    setProcessedUrl(null);
-
+    setProcessedFileId(null); setProcessedUrl(null);
     try {
       const res = await fetch(`${API}/process`, {
         method: "POST",
@@ -120,14 +96,8 @@ export default function App() {
 
   const handleReset = () => {
     if (pollRef.current) clearInterval(pollRef.current);
-    setFile(null);
-    setFileId(null);
-    setUploading(false);
-    setUploadError(null);
-    setJobId(null);
-    setJobStatus(null);
-    setProcessing(false);
-    setProcessedFileId(null);
+    setFile(null); setFileId(null); setUploading(false); setUploadError(null);
+    setJobId(null); setJobStatus(null); setProcessing(false); setProcessedFileId(null);
     if (processedUrl) URL.revokeObjectURL(processedUrl);
     setProcessedUrl(null);
   };
@@ -141,7 +111,6 @@ export default function App() {
         <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-purple-700/10 blur-3xl" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-indigo-700/10 blur-3xl" />
       </div>
-
       <div className="relative z-10 max-w-2xl mx-auto px-4 py-12">
         <div className="mb-10 text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-xs font-semibold uppercase tracking-widest mb-4">
@@ -151,13 +120,10 @@ export default function App() {
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-3 bg-gradient-to-br from-white via-white/90 to-white/50 bg-clip-text text-transparent">
             Make AI Vocals Sound Human
           </h1>
-          <p className="text-white/40 text-base">
-            One-click polish for AI vocals.
-          </p>
+          <p className="text-white/40 text-base">One-click polish for AI vocals.</p>
         </div>
 
         <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-6 sm:p-8 space-y-7 backdrop-blur-sm">
-
           {!file ? (
             <UploadArea onFileSelected={handleFileSelected} disabled={busy} />
           ) : (
@@ -169,18 +135,12 @@ export default function App() {
                   </svg>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-white truncate max-w-[180px] sm:max-w-xs">
-                    {file.name}
-                  </p>
+                  <p className="text-sm font-medium text-white truncate max-w-[180px] sm:max-w-xs">{file.name}</p>
                   <p className="text-xs text-white/40">{formatBytes(file.size)}</p>
                 </div>
               </div>
               {!busy && (
-                <button
-                  onClick={handleReset}
-                  className="ml-3 text-white/30 hover:text-white/70 transition-colors"
-                  title="Remove file"
-                >
+                <button onClick={handleReset} className="ml-3 text-white/30 hover:text-white/70 transition-colors">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -190,11 +150,8 @@ export default function App() {
           )}
 
           {uploadError && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">
-              {uploadError}
-            </div>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">{uploadError}</div>
           )}
-
           {uploading && (
             <div className="flex items-center gap-2 text-white/50 text-sm">
               <svg className="w-4 h-4 animate-spin text-purple-400" fill="none" viewBox="0 0 24 24">
@@ -211,15 +168,10 @@ export default function App() {
               <InputTypeSelector value={inputType} onChange={setInputType} disabled={busy} />
               <PresetSelector value={preset} onChange={setPreset} disabled={busy} />
               <StrengthSlider value={strength} onChange={setStrength} disabled={busy} />
-
               <button
                 onClick={handleProcess}
                 disabled={busy}
-                className="w-full py-4 rounded-xl font-bold text-base transition-all duration-200
-                  bg-gradient-to-r from-purple-600 to-indigo-600
-                  hover:from-purple-500 hover:to-indigo-500
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  shadow-lg shadow-purple-900/30"
+                className="w-full py-4 rounded-xl font-bold text-base transition-all duration-200 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-900/30"
               >
                 {processing ? (
                   <span className="flex items-center justify-center gap-2">
@@ -229,32 +181,19 @@ export default function App() {
                     </svg>
                     Humanizing…
                   </span>
-                ) : (
-                  "✦  Humanize Vocal"
-                )}
+                ) : "✦  Humanize Vocal"}
               </button>
             </>
           )}
 
-          {jobStatus && (
-            <ProgressBar
-              status={jobStatus.status}
-              progress={jobStatus.progress}
-              error={jobStatus.error}
-              warning={jobStatus.warning}
-            />
-          )}
+          {jobStatus && <ProgressBar status={jobStatus.status} progress={jobStatus.progress} error={jobStatus.error} warning={jobStatus.warning} />}
 
           {done && (
             <div className="space-y-6">
               <div className="border-t border-white/8" />
               <AudioPlayer originalFile={file} processedUrl={processedUrl} />
               <DownloadButtons fileId={processedFileId} disabled={false} />
-
-              <button
-                onClick={handleReset}
-                className="w-full py-3 rounded-xl border border-white/15 text-white/50 hover:text-white/80 hover:border-white/30 text-sm font-medium transition-all"
-              >
+              <button onClick={handleReset} className="w-full py-3 rounded-xl border border-white/15 text-white/50 hover:text-white/80 hover:border-white/30 text-sm font-medium transition-all">
                 Process Another File
               </button>
             </div>
@@ -277,10 +216,7 @@ export default function App() {
             ))}
           </div>
         )}
-
-        <p className="text-center text-white/20 text-xs mt-10">
-          Vocal Humanizer AI · Open-source DSP · No AI models required
-        </p>
+        <p className="text-center text-white/20 text-xs mt-10">Vocal Humanizer AI · Open-source DSP · No AI models required</p>
       </div>
     </div>
   );

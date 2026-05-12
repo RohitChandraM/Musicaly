@@ -42,7 +42,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory job store  {job_id: {"status": str, "file_id": str, "error": str}}
 jobs: dict[str, dict] = {}
 jobs_lock = threading.Lock()
 
@@ -53,13 +52,8 @@ def on_startup():
     start_cleanup_thread()
 
 
-# ---------------------------------------------------------------------------
-# POST /upload
-# ---------------------------------------------------------------------------
-
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """Accept an audio file and return a file_id for later processing."""
     meta = await save_upload(file)
     return {
         "file_id": meta["file_id"],
@@ -69,22 +63,8 @@ async def upload_file(file: UploadFile = File(...)):
     }
 
 
-# ---------------------------------------------------------------------------
-# POST /process
-# ---------------------------------------------------------------------------
-
 @app.post("/process")
 async def process_file(body: dict, background_tasks: BackgroundTasks):
-    """
-    Start a processing job.
-    Body: {
-        "file_id": str,
-        "input_type": "vocal_stem" | "full_song" | "auto",
-        "preset": "natural" | "warm" | "rap_punchy",
-        "strength": float  (0.0 – 1.0)
-    }
-    Returns: {"job_id": str}
-    """
     file_id = body.get("file_id")
     input_type = body.get("input_type", "auto")
     preset_name = body.get("preset", "natural")
@@ -115,17 +95,8 @@ async def process_file(body: dict, background_tasks: BackgroundTasks):
     return {"job_id": job_id}
 
 
-def _run_job(
-    job_id: str,
-    file_id: str,
-    upload_path: str,
-    input_type: str,
-    preset_name: str,
-    strength: float,
-):
-    """Background worker that runs the full processing chain."""
-
-    def set_status(status: str, progress: int = 0, error: str = None):
+def _run_job(job_id, file_id, upload_path, input_type, preset_name, strength):
+    def set_status(status, progress=0, error=None):
         with jobs_lock:
             jobs[job_id]["status"] = status
             jobs[job_id]["progress"] = progress
@@ -135,7 +106,6 @@ def _run_job(
     try:
         set_status("processing", progress=5)
 
-        # --- Step 1: Determine if we need stem separation ---
         needs_separation = False
         if input_type == "full_song":
             needs_separation = True
@@ -152,11 +122,8 @@ def _run_job(
                 stems = separate_stems(upload_path, output_dir=TEMP_DIR)
                 vocal_path = stems["vocals"]
                 instrumental_path = stems["no_vocals"]
-                logger.info("Separation done. Vocals: %s", vocal_path)
             except Exception as exc:
                 if "DemucsUnavailable" in type(exc).__name__ or "not installed" in str(exc).lower():
-                    set_status("processing", progress=10)
-                    logger.warning("Demucs unavailable — processing as vocal stem: %s", exc)
                     vocal_path = upload_path
                     instrumental_path = None
                     with jobs_lock:
@@ -168,29 +135,19 @@ def _run_job(
                     raise
 
         set_status("processing", progress=25)
-
-        # --- Step 2: Convert vocal to 44.1 kHz WAV ---
         wav_input = os.path.join(TEMP_DIR, f"{file_id}_input.wav")
         convert_to_wav(vocal_path, wav_input, sample_rate=44100)
 
         set_status("processing", progress=35)
-
-        # --- Step 3: Load audio ---
         audio, sr = sf.read(wav_input, dtype="float64", always_2d=False)
-        logger.info("Loaded audio: %d samples @ %d Hz, shape=%s", len(audio), sr, audio.shape)
 
         set_status("processing", progress=45)
-
-        # --- Step 4: Build scaled preset ---
         preset = get_preset(preset_name)
         scaled = scale_preset(preset, strength)
-
-        # --- Step 5: Process ---
         processed = process_vocal(audio, sr, scaled)
 
         set_status("processing", progress=80)
 
-        # --- Step 6: Mix back with instrumental if we separated ---
         if instrumental_path is not None:
             from stem_separator import mix_vocal_with_instrumental
             processed_vocal_wav = os.path.join(TEMP_DIR, f"{file_id}_processed_vocal.wav")
@@ -202,22 +159,18 @@ def _run_job(
             export_wav(processed, sr, wav_out)
 
         set_status("processing", progress=90)
-
-        # --- Step 7: Export MP3 ---
         wav_out = os.path.join(TEMP_DIR, f"{file_id}_processed.wav")
         mp3_out = os.path.join(TEMP_DIR, f"{file_id}_processed.mp3")
         export_mp3(wav_out, mp3_out)
 
         set_status("done", progress=100)
-        logger.info("Job %s complete for file %s", job_id, file_id)
 
     except Exception as exc:
         logger.exception("Job %s failed: %s", job_id, exc)
         set_status("error", progress=0, error=str(exc))
 
 
-def _looks_like_full_song(path: str) -> bool:
-    """Rough heuristic: stereo file longer than 90 seconds = probably a full song."""
+def _looks_like_full_song(path):
     try:
         info = sf.info(path)
         return info.channels >= 2 and info.duration > 90
@@ -225,13 +178,8 @@ def _looks_like_full_song(path: str) -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------
-# GET /status/{job_id}
-# ---------------------------------------------------------------------------
-
 @app.get("/status/{job_id}")
 def get_status(job_id: str):
-    """Poll job status and progress."""
     with jobs_lock:
         job = jobs.get(job_id)
     if not job:
@@ -239,35 +187,17 @@ def get_status(job_id: str):
     return job
 
 
-# ---------------------------------------------------------------------------
-# GET /download/{file_id}
-# ---------------------------------------------------------------------------
-
 @app.get("/download/{file_id}")
 def download_file(file_id: str, fmt: str = "wav"):
-    """
-    Download a processed file.
-    Query param: fmt=wav (default) or fmt=mp3
-    """
     fmt = fmt.lower()
     if fmt not in ("wav", "mp3"):
         raise HTTPException(status_code=400, detail="fmt must be 'wav' or 'mp3'.")
-
     path = get_processed_path(file_id, fmt)
     if not path:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Processed {fmt.upper()} file not found. Has processing completed?",
-        )
-
+        raise HTTPException(status_code=404, detail=f"Processed {fmt.upper()} file not found.")
     media_type = "audio/wav" if fmt == "wav" else "audio/mpeg"
-    filename = f"humanized_vocal.{fmt}"
-    return FileResponse(path, media_type=media_type, filename=filename)
+    return FileResponse(path, media_type=media_type, filename=f"humanized_vocal.{fmt}")
 
-
-# ---------------------------------------------------------------------------
-# GET /health
-# ---------------------------------------------------------------------------
 
 @app.get("/health")
 def health():
